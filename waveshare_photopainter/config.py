@@ -24,12 +24,19 @@ class DefaultPins:
     EPD_RST = 8     # Reset
     EPD_BUSY = 7    # Busy signal
     
+    # I2C pins for AXP2101 PMIC
+    I2C_SCL = 18    # I2C Clock
+    I2C_SDA = 17    # I2C Data
+    
     # SPI Configuration
     SPI_BAUDRATE = 4000000  # 4 MHz
     SPI_POLARITY = 0
     SPI_PHASE = 0
     SPI_BITS = 8
     SPI_FIRSTBIT = 0  # MSB first
+    
+    # I2C Configuration
+    I2C_FREQ = 400000  # 400 kHz
 
 # Display Specifications
 class DisplaySpec:
@@ -86,6 +93,47 @@ def get_default_pins():
     busy = Pin(DefaultPins.EPD_BUSY, Pin.IN)
     
     return cs, dc, rst, busy
+
+def get_default_i2c(i2c_id=0):
+    """
+    Get a configured I2C object with default settings.
+    
+    Args:
+        i2c_id: I2C bus ID (default: 0)
+    
+    Returns:
+        Configured I2C object
+    """
+    from machine import I2C
+    
+    return I2C(
+        i2c_id,
+        scl=Pin(DefaultPins.I2C_SCL),
+        sda=Pin(DefaultPins.I2C_SDA),
+        freq=DefaultPins.I2C_FREQ
+    )
+
+def create_pmic():
+    """
+    Create and return an AXP2101 PMIC object with default configuration.
+    
+    Returns:
+        Initialized AXP2101 PMIC object
+    """
+    try:
+        from .drivers import AXP2101
+    except ImportError:
+        # Handle when run as standalone script
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(__file__))
+        from drivers import AXP2101
+    
+    i2c = get_default_i2c()
+    pmic = AXP2101(i2c)
+    pmic.init()
+    
+    return pmic
 
 def create_display():
     """

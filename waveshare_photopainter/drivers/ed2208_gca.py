@@ -259,3 +259,189 @@ class ED2208_GCA:
     def blit(self, fbuf, x, y, key=-1, palette=None):
         """Blit another framebuffer to this one."""
         self.fb.blit(fbuf, x, y, key, palette)
+
+
+# AXP2101 PMIC Constants
+AXP2101_ADDR = const(0x34)  # I2C address
+
+# AXP2101 Register addresses
+AXP2101_STATUS = const(0x00)
+AXP2101_MODE_CHGSTATUS = const(0x01)
+AXP2101_DATA_BUFFER0 = const(0x04)
+AXP2101_VBUS_VOL_SET = const(0x16)
+AXP2101_VSYS_VOL_SET = const(0x27)
+AXP2101_POWER_ON_SOURCE = const(0x10)
+AXP2101_POWER_OFF_EN = const(0x12)
+AXP2101_DC_ONOFF_DVM = const(0x80)
+AXP2101_LDO_ONOFF_SET = const(0x90)
+AXP2101_ADC_CHANNEL_CONTROL = const(0x30)
+AXP2101_TS_PIN_CONTROL = const(0x38)
+AXP2101_IRQ_ENABLE1 = const(0x40)
+AXP2101_IRQ_STATUS1 = const(0x48)
+
+
+class AXP2101:
+    """
+    Driver for AXP2101 Power Management IC (PMIC)
+    
+    This class provides methods to initialize and control the AXP2101 PMIC
+    used on the Waveshare ESP32-S3 PhotoPainter board for power management,
+    battery charging, and voltage regulation.
+    """
+    
+    def __init__(self, i2c, addr=AXP2101_ADDR):
+        """
+        Initialize the AXP2101 PMIC driver.
+        
+        Args:
+            i2c: I2C bus object
+            addr: I2C address of the AXP2101 (default: 0x34)
+        """
+        self.i2c = i2c
+        self.addr = addr
+        
+        # Check if device is present
+        try:
+            self._read_reg(AXP2101_STATUS)
+        except OSError:
+            raise RuntimeError("AXP2101 not found at address 0x{:02X}".format(addr))
+    
+    def _read_reg(self, reg, nbytes=1):
+        """Read one or more bytes from a register."""
+        return self.i2c.readfrom_mem(self.addr, reg, nbytes)
+    
+    def _write_reg(self, reg, data):
+        """Write one or more bytes to a register."""
+        if isinstance(data, int):
+            data = bytes([data])
+        self.i2c.writeto_mem(self.addr, reg, data)
+    
+    def _set_bit(self, reg, bit):
+        """Set a specific bit in a register."""
+        val = self._read_reg(reg)[0]
+        val |= (1 << bit)
+        self._write_reg(reg, val)
+    
+    def _clear_bit(self, reg, bit):
+        """Clear a specific bit in a register."""
+        val = self._read_reg(reg)[0]
+        val &= ~(1 << bit)
+        self._write_reg(reg, val)
+    
+    def init(self):
+        """
+        Initialize the AXP2101 with default settings for ESP32-S3 PhotoPainter.
+        
+        This sets up power rails, charging parameters, and enables necessary
+        LDOs for the display and other peripherals.
+        """
+        # Enable DCDC1 (3.3V for system)
+        self._set_bit(AXP2101_DC_ONOFF_DVM, 0)
+        
+        # Enable DCDC2 (for ESP32-S3 core)
+        self._set_bit(AXP2101_DC_ONOFF_DVM, 1)
+        
+        # Enable DCDC3 (for peripherals)
+        self._set_bit(AXP2101_DC_ONOFF_DVM, 2)
+        
+        # Enable ALDO1 for e-paper display (typically 3.3V)
+        self._set_bit(AXP2101_LDO_ONOFF_SET, 0)
+        
+        # Enable ALDO2 for additional peripherals
+        self._set_bit(AXP2101_LDO_ONOFF_SET, 1)
+        
+        # Small delay for power stabilization
+        sleep_ms(10)
+    
+    def enable_display_power(self):
+        """Enable power rail for the e-paper display."""
+        self._set_bit(AXP2101_LDO_ONOFF_SET, 0)
+        sleep_ms(5)
+    
+    def disable_display_power(self):
+        """Disable power rail for the e-paper display to save power."""
+        self._clear_bit(AXP2101_LDO_ONOFF_SET, 0)
+    
+    def enable_dcdc1(self):
+        """Enable DCDC1 (system power)."""
+        self._set_bit(AXP2101_DC_ONOFF_DVM, 0)
+    
+    def disable_dcdc1(self):
+        """Disable DCDC1 (system power)."""
+        self._clear_bit(AXP2101_DC_ONOFF_DVM, 0)
+    
+    def enable_dcdc2(self):
+        """Enable DCDC2 (ESP32 core power)."""
+        self._set_bit(AXP2101_DC_ONOFF_DVM, 1)
+    
+    def disable_dcdc2(self):
+        """Disable DCDC2 (ESP32 core power)."""
+        self._clear_bit(AXP2101_DC_ONOFF_DVM, 1)
+    
+    def enable_dcdc3(self):
+        """Enable DCDC3 (peripheral power)."""
+        self._set_bit(AXP2101_DC_ONOFF_DVM, 2)
+    
+    def disable_dcdc3(self):
+        """Disable DCDC3 (peripheral power)."""
+        self._clear_bit(AXP2101_DC_ONOFF_DVM, 2)
+    
+    def get_status(self):
+        """
+        Get the current status of the PMIC.
+        
+        Returns:
+            Status byte with power state information
+        """
+        return self._read_reg(AXP2101_STATUS)[0]
+    
+    def get_charging_status(self):
+        """
+        Get the battery charging status.
+        
+        Returns:
+            Charging status byte
+        """
+        return self._read_reg(AXP2101_MODE_CHGSTATUS)[0]
+    
+    def is_charging(self):
+        """
+        Check if battery is currently charging.
+        
+        Returns:
+            True if charging, False otherwise
+        """
+        status = self.get_charging_status()
+        return (status & 0x0F) in [0x01, 0x02]  # Charging states
+    
+    def is_battery_present(self):
+        """
+        Check if battery is connected.
+        
+        Returns:
+            True if battery is present, False otherwise
+        """
+        status = self.get_status()
+        return bool(status & 0x08)
+    
+    def power_off(self):
+        """
+        Power off the system.
+        
+        Note: This will shut down the ESP32 board.
+        """
+        self._set_bit(AXP2101_POWER_OFF_EN, 0)
+    
+    def clear_irq(self):
+        """Clear all interrupt flags."""
+        # Clear IRQ status registers
+        self._write_reg(AXP2101_IRQ_STATUS1, 0xFF)
+        self._write_reg(AXP2101_IRQ_STATUS1 + 1, 0xFF)
+    
+    def enable_adc(self):
+        """Enable ADC channels for voltage/current monitoring."""
+        self._write_reg(AXP2101_ADC_CHANNEL_CONTROL, 0xFF)
+    
+    def disable_adc(self):
+        """Disable ADC channels to save power."""
+        self._write_reg(AXP2101_ADC_CHANNEL_CONTROL, 0x00)

@@ -5,12 +5,15 @@ MicroPython driver for the Waveshare ESP32-S3 PhotoPainter with ED2208-GCA e-pap
 ## Features
 
 - Full support for ED2208-GCA 2.13" e-paper display (250x122 pixels)
+- AXP2101 Power Management IC (PMIC) driver
 - Hardware SPI communication
+- I2C communication for PMIC
 - Framebuffer-based drawing operations
 - Low power consumption with deep sleep mode
 - Drawing primitives (lines, rectangles, circles)
 - Text rendering
 - Image display support
+- Battery management and power control
 
 ## Hardware Specifications
 
@@ -21,6 +24,12 @@ MicroPython driver for the Waveshare ESP32-S3 PhotoPainter with ED2208-GCA e-pap
 - **Interface**: SPI
 - **Viewing Angle**: >170°
 - **Refresh Time**: ~2 seconds
+
+### AXP2101 PMIC
+- **Interface**: I2C (address 0x34)
+- **Function**: Power management, battery charging, voltage regulation
+- **Power Rails**: DCDC1, DCDC2, DCDC3, ALDO1, ALDO2
+- **Features**: Battery monitoring, charging control, power sequencing
 
 ### Pin Configuration
 
@@ -34,6 +43,8 @@ The driver requires the following connections:
 | DC           | GPIO 9       | Data/Command |
 | RST          | GPIO 8       | Reset |
 | BUSY         | GPIO 7       | Busy Signal |
+| I2C_SCL      | GPIO 18      | I2C Clock (PMIC) |
+| I2C_SDA      | GPIO 17      | I2C Data (PMIC) |
 
 **Note**: Pin numbers may vary depending on your specific board configuration. Adjust them in the example code accordingly.
 
@@ -51,16 +62,23 @@ waveshare_photopainter/
 └── examples/
     ├── basic_demo.py         # Basic usage example
     ├── advanced_graphics.py  # Advanced graphics demo
-    └── image_display.py      # Image display example
+    ├── image_display.py      # Image display example
+    └── pmic_demo.py          # PMIC usage example
 ```
 
 ## Quick Start
 
-### Basic Usage
+### Basic Usage with PMIC
 
 ```python
-from machine import Pin, SPI
-from drivers.ed2208_gca import ED2208_GCA
+from machine import Pin, SPI, I2C
+from drivers.ed2208_gca import ED2208_GCA, AXP2101
+
+# Initialize PMIC first
+i2c = I2C(0, scl=Pin(18), sda=Pin(17), freq=400000)
+pmic = AXP2101(i2c)
+pmic.init()
+pmic.enable_display_power()
 
 # Initialize SPI
 spi = SPI(1, baudrate=4000000, polarity=0, phase=0,
@@ -171,6 +189,74 @@ Blit (copy) another framebuffer onto this one.
 - `key`: Transparent color key (optional)
 - `palette`: Color palette (optional)
 
+### AXP2101 Class
+
+The AXP2101 class provides control over the Power Management IC on the Waveshare ESP32-S3 PhotoPainter.
+
+#### Initialization
+
+```python
+AXP2101(i2c, addr=0x34)
+```
+
+**Parameters:**
+- `i2c`: I2C bus object
+- `addr`: I2C address (default: 0x34)
+
+#### Power Management Methods
+
+##### `init()`
+Initialize the PMIC with default settings. This enables power rails for the ESP32-S3 and peripherals.
+
+##### `enable_display_power()`
+Enable the power rail for the e-paper display (ALDO1).
+
+##### `disable_display_power()`
+Disable the display power rail to save power when the display is not in use.
+
+##### `enable_dcdc1()` / `disable_dcdc1()`
+Control DCDC1 power rail (system power, 3.3V).
+
+##### `enable_dcdc2()` / `disable_dcdc2()`
+Control DCDC2 power rail (ESP32-S3 core power).
+
+##### `enable_dcdc3()` / `disable_dcdc3()`
+Control DCDC3 power rail (peripheral power).
+
+#### Status and Monitoring
+
+##### `get_status()`
+Get the current PMIC status.
+- **Returns**: Status byte with power state information
+
+##### `get_charging_status()`
+Get the battery charging status.
+- **Returns**: Charging status byte
+
+##### `is_charging()`
+Check if the battery is currently charging.
+- **Returns**: `True` if charging, `False` otherwise
+
+##### `is_battery_present()`
+Check if a battery is connected.
+- **Returns**: `True` if battery is present, `False` otherwise
+
+#### ADC Control
+
+##### `enable_adc()`
+Enable ADC channels for voltage and current monitoring.
+
+##### `disable_adc()`
+Disable ADC channels to save power.
+
+#### Other Methods
+
+##### `clear_irq()`
+Clear all interrupt flags.
+
+##### `power_off()`
+Power off the entire system. **Warning**: This will shut down the ESP32 board.
+
 ## Examples
 
 ### Example 1: Display Text and Shapes
@@ -225,6 +311,44 @@ for x in range(0, 200, 10):
     epd.text("Moving...", x, 30, 1)
     epd.display()
     sleep(0.5)
+```
+
+### Example 4: Power Management with PMIC
+
+```python
+from machine import Pin, SPI, I2C
+from drivers.ed2208_gca import ED2208_GCA, AXP2101
+from time import sleep
+
+# Initialize PMIC
+i2c = I2C(0, scl=Pin(18), sda=Pin(17), freq=400000)
+pmic = AXP2101(i2c)
+pmic.init()
+
+# Check battery status
+if pmic.is_battery_present():
+    print("Battery connected")
+    if pmic.is_charging():
+        print("Battery is charging")
+    else:
+        print("Battery not charging")
+
+# Enable display power
+pmic.enable_display_power()
+
+# Initialize and use display
+spi = SPI(1, baudrate=4000000, sck=Pin(12), mosi=Pin(11))
+epd = ED2208_GCA(spi, Pin(10), Pin(9), Pin(8), Pin(7))
+
+epd.fill(0)
+epd.text("PMIC Demo", 10, 10, 1)
+epd.display()
+
+sleep(5)
+
+# Power down display
+epd.sleep()
+pmic.disable_display_power()
 ```
 
 ## Power Consumption
