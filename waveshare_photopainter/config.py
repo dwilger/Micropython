@@ -94,7 +94,14 @@ def create_display():
     Returns:
         Initialized ED2208_GCA display object
     """
-    from .drivers import ED2208_GCA
+    try:
+        from .drivers import ED2208_GCA
+    except ImportError:
+        # Handle when run as standalone script
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(__file__))
+        from drivers import ED2208_GCA
     
     spi = get_default_spi()
     cs, dc, rst, busy = get_default_pins()

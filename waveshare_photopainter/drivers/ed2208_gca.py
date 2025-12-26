@@ -69,11 +69,10 @@ class ED2208_GCA:
         self.width = EPD_WIDTH
         self.height = EPD_HEIGHT
         
-        # Initialize pins
-        self.cs.init(self.cs.OUT, value=1)
-        self.dc.init(self.dc.OUT, value=0)
-        self.rst.init(self.rst.OUT, value=0)
-        self.busy.init(self.busy.IN)
+        # Set initial pin values (pins should already be initialized)
+        self.cs.value(1)
+        self.dc.value(0)
+        self.rst.value(0)
         
         # Create framebuffer (1 bit per pixel for black/white)
         self.buffer = bytearray(self.height * self.width // 8)
@@ -194,8 +193,9 @@ class ED2208_GCA:
         self._set_memory_pointer(0, 0)
         
         self._send_command(WRITE_RAM)
-        for _ in range(self.width // 8 * self.height):
-            self._send_data(color)
+        # Send clear data in one buffer for efficiency
+        clear_buffer = bytearray([color] * (self.width // 8 * self.height))
+        self._send_data(clear_buffer)
         
         # Also clear framebuffer
         if color == 0xFF:
