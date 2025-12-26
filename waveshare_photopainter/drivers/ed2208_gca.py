@@ -1,6 +1,6 @@
 """
 MicroPython driver for Waveshare ED2208-GCA E-Paper Display
-(2.13 inch, 250x122 pixels, Grayscale)
+(2.13 inch, 250x122 pixels, Black and White)
 
 This driver provides support for the Waveshare ESP32-S3 PhotoPainter
 with ED2208-GCA e-paper display module.
@@ -46,7 +46,7 @@ class ED2208_GCA:
     Driver for ED2208-GCA E-Paper Display
     
     This class provides methods to control and draw on the Waveshare
-    ED2208-GCA grayscale e-paper display.
+    ED2208-GCA black and white e-paper display.
     """
     
     def __init__(self, spi, cs, dc, rst, busy):

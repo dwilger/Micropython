@@ -8,7 +8,6 @@ drawing complex shapes and patterns.
 from machine import Pin, SPI
 from drivers.ed2208_gca import ED2208_GCA
 from time import sleep
-import math
 
 # Pin configuration
 SPI_SCK = 12
